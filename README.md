@@ -1,2 +1,2 @@
 # CE_EV_Batteries
-Autumn School Group Work
+This is a group work exercise for the Autumn School Brightway 2024...
