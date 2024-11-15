@@ -1,0 +1,65 @@
+#TimeEx for the battery
+
+from brightway2 import *
+from bw_timex import TimexLCA
+import bw2data as bd
+from datetime import datetime
+db_2020 = bd.Database("ei310_IMAGE_SSP2_RCP19_2020_electricity")
+db_2030 = bd.Database("ei310_IMAGE_SSP2_RCP19_2030_electricity")
+db_2040 = bd.Database("ei310_IMAGE_SSP2_RCP19_2040_electricity")
+db_2050 = bd.Database("ei310_IMAGE_SSP2_RCP19_2050_electricity")
+db_name = 'energy_storage_analysis'
+
+#db_name = 'foreground'
+#path = r'Downloads\energy_storage_analysis.xlsx'
+#bw2data.importers.ExcelImporter(path, db_name).apply_strategies().write_database()
+#foreground.register() #is this needed?
+td_use_phase = easy_timedelta_distribution(
+    start=0,
+    end=L,
+    resolution="Y",
+    steps=(L + 1),
+    kind="uniform",
+)
+electricity_production = db_2020.get(name="market group for electricity, low voltage", location="GLO")
+driving = foreground.new_node("driving", name="driving an electric vehicle", unit="transport over an ev lifetime")
+driving['reference product'] = "transport"
+driving.save()
+electricity_to_driving = driving.new_edge(
+    input=electricity_production,
+    amount=Ep_netEV * L, ### make it right!
+    type="technosphere",
+)
+electricity_to_driving["temporal_distribution"] = td_use_phase
+electricity_to_driving.save()
+# doing the LCA
+method = ('EF v3.1', 'climate change', 'global warming potential (GWP100)') #or whatever
+
+database_date_dict = {
+    db_2020.name: datetime.strptime("2020", "%Y"),
+    db_2030.name: datetime.strptime("2030", "%Y"),
+    db_2040.name: datetime.strptime("2040", "%Y"),
+    db_2050.name: datetime.strptime("2050", "%Y"),
+    "foreground": "dynamic", # flag databases that should be temporally distributed with "dynamic"
+}
+#initiate a timexLCA object for our driving activity
+tlca = TimexLCA({driving: 1}, method, database_date_dict)
+tlca.build_timeline(temporal_grouping="month")
+tlca.lci()
+tlca.dynamic_inventory
+#two options here: 1. do dynamic characterization which means see the emissions over time. 2. Just use the dynamic
+#data like elec. mix and see the final score at the end. this below is the first option.
+tlca.static_lcia()
+tlca.static_score
+tlca.base_lca.score
+
+
+
+#trying to do dynamic LCA
+tlca.dynamic_lcia(metric="GWP", fixed_time_horizon=False, time_horizon = 70)
+tlca.dynamic_score #kg CO2-eq (GWP)
+
+#Plotting the GWP results over time:
+tlca.plot_dynamic_characterized_inventory(sum_emissions_within_activity=True)
+#Cumulative
+tlca.plot_dynamic_characterized_inventory(sum_emissions_within_activity=True, cumsum=True)
